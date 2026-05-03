@@ -50,3 +50,34 @@ def top5_predictions(logits: np.ndarray, labels: list[str]) -> list[dict]:
         {"label": labels[idx], "confidence": round(score, 4), "index": idx}
         for score, idx in zip(top5.values.tolist(), top5.indices.tolist())
     ]
+
+
+def warmup(model: torch.nn.Module, device: torch.device, n: int = 3) -> None:
+    """模型预热: 用随机输入执行 n 次前向推理, 触发 CUDA kernel 初始化和显存分配。"""
+    dummy = torch.randn(1, 3, 224, 224).to(device)
+    with torch.no_grad():
+        for _ in range(n):
+            _ = model(dummy)
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    print(f"  Model warmed up with {n} dummy iterations on {device}")
+
+
+def get_gpu_memory() -> dict:
+    """返回 GPU 显存使用信息 (MB)."""
+    if not torch.cuda.is_available():
+        return {"available": False, "allocated_mb": 0, "reserved_mb": 0}
+    return {
+        "available": True,
+        "device_name": torch.cuda.get_device_name(0),
+        "allocated_mb": round(torch.cuda.memory_allocated(0) / 1024 / 1024, 1),
+        "reserved_mb": round(torch.cuda.memory_reserved(0) / 1024 / 1024, 1),
+    }
+
+
+def log_gpu_memory(prefix: str = "") -> None:
+    mem = get_gpu_memory()
+    if mem["available"]:
+        print(f"  {prefix}GPU memory — allocated: {mem['allocated_mb']} MB, reserved: {mem['reserved_mb']} MB")
+    else:
+        print(f"  {prefix}GPU not available")
